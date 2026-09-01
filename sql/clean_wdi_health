@@ -1,0 +1,75 @@
+SELECT *
+FROM filtered_wdi_psychology
+LIMIT 10;
+
+SELECT
+COUNT(*) AS total_rows,
+COUNT(DISTINCT "Country Code") AS unique_countries,
+COUNT(DISTINCT "Indicator Code") AS unique_indicators
+FROM filtered_wdi_psychology;
+
+SELECT 
+COUNT(*) FILTER(WHERE "Country Name" IS NULL) as null_country_names,
+COUNT(*) FILTER(WHERE "Country Code" IS NULL) as null_country_codes,
+COUNT(*) FILTER(WHERE "Indicator Code" IS NULL) as null_indicator_codes
+FROM filtered_wdi_psychology;
+
+CREATE VIEW clean_wdi_health AS
+  SELECT 
+  "Country Name" AS country_name,
+  "Country Code" AS country_code,
+  "Indicator Name" AS indicator_name,
+  "Indicator Code" AS indicator_code,
+  unpivoted.year::INT AS year_val,
+  ROUND(unpivoted.value::NUMERIC, 2) AS metric_value
+  FROM filtered_wdi_psychology
+  CROSS JOIN LATERAL(
+    VALUES
+    (2015, "2015"::NUMERIC), (2016, "2016"::NUMERIC), (2017, "2017"::NUMERIC),
+    (2018, "2018"::NUMERIC), (2019, "2019"::NUMERIC), (2020, "2020"::NUMERIC),
+    (2021, "2021"::NUMERIC), (2022, "2022"::NUMERIC), (2023, "2023"::NUMERIC),
+    (2024, "2024"::NUMERIC), (2025, NULLIF("2025", '')::NUMERIC)
+  ) AS unpivoted(year, value)
+WHERE unpivoted.value IS NOT NULL;
+
+select *
+from clean_wdi_health
+LIMIT 10;
+  
+select
+column_name, data_type
+FROM information_schema.columns
+WHERE table_name = 'clean_wdi_health';
+
+CREATE VIEW global_summary_indicators AS
+select
+indicator_code,
+indicator_name,
+ROUND(AVG(metric_value), 2) AS global_avg_value,
+ROUND(MIN(metric_value), 2) AS min_value,
+ROUND(MAX(metric_value), 2) AS max_value
+FROM clean_wdi_health
+GROUP BY indicator_code, indicator_name
+ORDER by indicator_code;
+
+CREATE VIEW high_vs_low_suicide_rate as
+select
+country_name,
+country_code,
+ROUND(AVG(metric_value), 2) AS avg_suicide_rate
+FROM clean_wdi_health
+GROUP BY country_name, country_code
+ORDER BY avg_suicide_rate DESC;
+
+CREATE VIEW yoy_trend_analysis as
+select
+year_val,
+indicator_code,
+indicator_name,
+ROUND (AVG(metric_value), 2) AS yearly_avg
+FROM clean_wdi_health
+GROUP BY year_val, indicator_code, indicator_name
+ORDER BY year_val ASC, indicator_code;
+
+SELECT DISTINCT indicator_name
+FROM clean_wdi_health;
